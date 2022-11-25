@@ -1,0 +1,6 @@
+{
+    "files.associations": {
+        "inotherhelper.h": "c",
+        "stdio.h": "c"
+    }
+}
