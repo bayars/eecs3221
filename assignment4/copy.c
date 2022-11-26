@@ -88,7 +88,7 @@ void produce(int threadNumber, Data *item, int bufSize){
     pthread_mutex_lock(&mutex);
     printf("thread %d: consume %c\n", threadNumber, item->data);
     buffer[insertPointer] = *item;
-    // writeToLog("produce",threadNumber, item, insertPointer);
+    writeToLog("produce",threadNumber, item, insertPointer);
     insertPointer = (insertPointer+1) % bufSize;
     pthread_mutex_unlock(&mutex);
     sem_post(&full);
@@ -98,7 +98,7 @@ void consume(int threadNumber, Data *item, int bufSize){
     sem_wait(&full);
     pthread_mutex_lock(&mutex);
     item =  &buffer[removePointer];
-    // writeToLog("consume", threadNumber, item, removePointer);
+    writeToLog("consume", threadNumber, &item, 0);
     removePointer = (removePointer + 1) % bufSize;
     pthread_mutex_unlock(&mutex);
     sem_post(&empty); 
