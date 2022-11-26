@@ -17,7 +17,7 @@ typedef struct{
 
 // nested struct with Data, and it stores thread integer variable
 typedef struct{
-    Data *data;
+    Data data;
     int threadNumber;
     int bufferSize;
     Data buffer[];
@@ -46,7 +46,6 @@ FILE *fp;
 void writeToLog(char *operation,int threadNumber, Data bufferItem, int i){
     fp = fopen("dataset4log.txt", "w");
     fprintf(fp, "%s P%d 0%ld B%d I%d\n", operation, threadNumber, bufferItem.offset, bufferItem.data, i); 
-    fclose(fp);
 }
 
 void nsleep(){
@@ -55,51 +54,51 @@ void nsleep(){
     nanosleep(&t, NULL);
 }
 
-void read_byte(int threadNumber, Data *item){
+void read_byte(int threadNumber, Data item){
     pthread_mutex_lock(&mutex);
-    if((item->offset = lseek(inputFile,0,SEEK_CUR)) < 0){
+    if((item.offset = lseek(inputFile,0,SEEK_CUR)) < 0){
         pthread_mutex_unlock(&mutex);
         fprintf(stderr, "Error: lseek failed1\n");
         exit(1);
     }
-    printf("read_byte: offset = %ld, read data = %c \n", item->offset, item->data);
-    if( read(inputFile, &item->data, 1) < 0){
+    printf("read_byte: offset = %ld, read data = %c \n", item.offset, item.data);
+    if( read(inputFile, &item.data, 1) < 0){
         printf("read_byte PT%ld: EOF pthread_exit(0)\n", pthread_self());
         pthread_mutex_unlock(&mutex);
         pthread_exit(0);
     }
-    writeToLog("read_byte",threadNumber, *item, -1);
+    writeToLog("read_byte",threadNumber, item, -1);
     pthread_mutex_unlock(&mutex);
 }
 
-void write_byte(int threadNumber, Data *item){
+void write_byte(int threadNumber, Data item){
     pthread_mutex_lock(&mutex);
     // printf("write_byte: %c\n", item->data);
-    if( write(outputFile, &item->data, 1) < 1){
+    if( write(outputFile, &item.data, 1) < 1){
         pthread_mutex_unlock(&mutex);
         fprintf(stderr, "Error: write failed\n");
         exit(1);
     }
-    writeToLog("write_byte",threadNumber, *item, -1);
+    writeToLog("write_byte",threadNumber, item, -1);
     pthread_mutex_unlock(&mutex);
 }
 
-void produce(int threadNumber, Data *item, int bufSize){
+void produce(int threadNumber, Data item, int bufSize){
     sem_wait(&empty);
     pthread_mutex_lock(&mutex);
-    printf("thread %d: consume %c\n", threadNumber, item->data);
-    buffer[insertPointer] = *item;
-    writeToLog("produce",threadNumber, *item, insertPointer);
+    printf("thread %d: consume %c\n", threadNumber, item.data);
+    buffer[insertPointer] = item;
+    writeToLog("produce",threadNumber, item, insertPointer);
     insertPointer = (insertPointer+1) % bufSize;
     pthread_mutex_unlock(&mutex);
     sem_post(&full);
 }
 
-void consume(int threadNumber, Data *item, int bufSize){
+void consume(int threadNumber, Data item, int bufSize){
     sem_wait(&full);
     pthread_mutex_lock(&mutex);
     *buffer = buffer[removePointer];
-    writeToLog("consume", threadNumber, *item, removePointer);
+    writeToLog("consume", threadNumber, item, removePointer);
     removePointer = (removePointer + 1) % bufSize;
     pthread_mutex_unlock(&mutex);
     sem_post(&empty); 
@@ -179,8 +178,9 @@ int main(int argc, char *argv[]) {
     outputFile = open("copied.txt", O_WRONLY | O_CREAT, 0666);
     inputFile = open("dataset4.txt", O_RDONLY,0666);
     threaddata.bufferSize=bufferSize;
-    threaddata.data = (Data *) malloc(sizeof(bufferSize));
+    threaddata.buffer[bufferSize];
 
+    threaddata.data.data = 'a';
     for(int i = 0; i < inThreadNumber; i++){
         threaddata.threadNumber=i;
         pthread_t tid;
