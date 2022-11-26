@@ -55,6 +55,8 @@ void nsleep(){
 
 void read_byte(int threadNumber, Data *item){
     pthread_mutex_lock(&mutex);
+        printf("%d",read(inputFile, &item->data, 1));
+    printf("%s",item.data);
     if((item->offset = lseek(inputFile,0,SEEK_CUR)) < 0){
         pthread_mutex_unlock(&mutex);
         fprintf(stderr, "Error: lseek failed1\n");
