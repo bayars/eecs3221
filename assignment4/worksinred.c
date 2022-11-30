@@ -25,7 +25,7 @@ typedef struct{
 
 off_t end_position; 
 struct timespec t;
-Data *buffer;
+Data buffer[];
 int insertPointer=0;
 int removePointer=0;
 // int *bufSize=51;
@@ -44,8 +44,8 @@ FILE *fp;
 
 
 //write to log file
-void writeToLog(char *operation,char *operationName, int threadNumber, Data bufferItem, int i){
-    fprintf(fp, "%s %s%i 0%ld B%d I%d\n", operation, operationName, threadNumber, bufferItem.offset, bufferItem.data, i); 
+void writeToLog(char *operation,int threadNumber, Data bufferItem, int i){
+    fprintf(fp, "%s P%d 0%ld B%d I%d\n", operation, threadNumber, bufferItem.offset, bufferItem.data, i); 
 }
 
 void nsleep(){
@@ -54,18 +54,30 @@ void nsleep(){
     nanosleep(&t, NULL);
 }
 
+void read_byte(int threadNumber, Data item){
+}
+
+void write_byte(int threadNumber, Data item){
+}
+
+void produce(int threadNumber, Data item, int bufSize){
+}
+
+void consume(int threadNumber, Data item, int bufSize){
+}
+
 void *producer( void * param){
     ThreadData *threadData = (ThreadData *) param;
     Data item = threadData->data;
     while (1){
         printf("original end position %ld, item position %ld\n",threadData->end_position,item.offset);
-        nsleep();
-        pthread_mutex_lock(&mutex);
         if(threadData->end_position == item.offset || item.data == '\n' || item.data == EOF){
             pthread_mutex_unlock(&mutex);
             pthread_exit(0);
-            exit(0);
+            break;
         }
+        nsleep();
+        pthread_mutex_lock(&mutex);
         if((item.offset = lseek(inputFile,0,SEEK_CUR)) < 0){
             pthread_mutex_unlock(&mutex);
             fprintf(stderr, "Error: lseek failed1\n");
@@ -76,15 +88,15 @@ void *producer( void * param){
             pthread_mutex_unlock(&mutex);
             pthread_exit(0);
         }
-        writeToLog("read_byte","P",threadData->threadNumber, item, -1);
+        /* printf("read_byte: offset = %ld, read data = %c \n", item.offset, item.data); */
+        writeToLog("read_byte",threadData->threadNumber, item, -1);
         pthread_mutex_unlock(&mutex);
         nsleep();
         sem_wait(&empty);
         pthread_mutex_lock(&mutex);
         buffer[insertPointer] = item;
-        writeToLog("produce","P",threadData->threadNumber, item, insertPointer);
-        insertPointer++;
-        insertPointer = (insertPointer) % threadData->bufferSize;
+        writeToLog("produce",threadData->threadNumber, item, insertPointer);
+        insertPointer = (insertPointer++) % threadData->bufferSize;
         pthread_mutex_unlock(&mutex);
         sem_post(&full);
     }
@@ -98,18 +110,20 @@ void *consumer( void * param){
         sem_wait(&full);
         pthread_mutex_lock(&mutex);
         item = buffer[removePointer];
-        writeToLog("consume","C", threadData->threadNumber, item, removePointer);
-        removePointer++;
-        removePointer = (removePointer) % threadData->bufferSize;
+        /* printf("write_byte: offset = %ld, write data = %d \n", item.offset, item.data); */
+        writeToLog("consume", threadData->threadNumber, item, removePointer);
+        removePointer = (removePointer++) % threadData->bufferSize;
+        pthread_mutex_unlock(&mutex);
+        sem_post(&empty); 
+        nsleep();
+        pthread_mutex_lock(&mutex);
         if(write(outputFile, &item.data, 1) < 1){
             pthread_mutex_unlock(&mutex);
             fprintf(stderr, "Error: write failed\n");
             exit(1);
         }
-        writeToLog("write_byte","C",threadData->threadNumber, item, -1);
-        sem_post(&empty); 
+        writeToLog("write_byte",threadData->threadNumber, item, -1);
         pthread_mutex_unlock(&mutex);
-        nsleep();
     }
 }
 
@@ -129,87 +143,64 @@ int main(int argc, char *argv[]) {
     pthread_mutex_init(&mutex, NULL);
 
     if( inThreadNumber < 1 ){
-        fprintf(stderr, "Error: Invalid number of input threads\n");
+        printf("Error: Invalid number of input threads");
         exit(1);
     }
 
     if( outThreadNumber < 1 ){
-        fprintf(stderr, "Error: Invalid number of output threads\n");
+        printf("Error: Invalid number of output threads");
         exit(1);
     }
 
     if( !(fopen(inputFileName, "r")) ){
-        fprintf(stderr, "Error: file not exist\n");
+        printf("Error: file does not exist");
         exit(1);
     }
 
     if( !(fopen(outputFileName, "w")) ){
-        fprintf(stderr, "Error: file not exist\n");
+        printf("Error: file does not exist");
         exit(1);
     }
 
     if( bufferSize < 1 ){
-        fprintf(stderr, "Error: Invalid buffer size\n");
+        printf("Error: Invalid buffer size");
         exit(1);
     }
 
     if( !(fopen(logFileName, "r")) ){
-        fprintf(stderr, "Error: logfile not exist\n");
+        printf("Error: file does not exist");
         exit(1);
     }
+    // char buffer[bufferSize];
 
-    outputFile = open(outputFileName, O_WRONLY | O_CREAT, 0666);
-    inputFile = open(inputFileName, O_RDONLY,0666);
-    tempinputFile = open(inputFileName, O_RDONLY,0666);
-    fp = fopen(logFileName , "w");
+    outputFile = open("copied.txt", O_WRONLY | O_CREAT, 0666);
+    inputFile = open("dataset4.txt", O_RDONLY,0666);
+    tempinputFile = open("dataset4.txt", O_RDONLY,0666);
+    fp = fopen("dataset4log.txt", "w");
 
-    buffer = malloc( bufferSize * sizeof(Data) );          
     off_t end_positionofinputfile = lseek(tempinputFile, 1, SEEK_END);
     threaddata.bufferSize=bufferSize;
-    threaddata.end_position=end_positionofinputfile - 1;
+    threaddata.end_position=end_positionofinputfile;
 
-    pthread_t inThreads[inThreadNumber], outThreads[outThreadNumber];
-
-    for( int x = 0; x < inThreadNumber; x++){
-        threaddata.threadNumber=x;
-        if( pthread_create(&inThreads[x], NULL, producer, (void *) &threaddata) != 0){
-            fprintf(stderr, "error: Cannot create thread # %d\n", x);
-            break;
-        }
+    // threaddata.data.data = 'a';
+    for(int i = 0; i < inThreadNumber; i++){
+        threaddata.threadNumber=i;
+        pthread_t tid;
+                pthread_attr_t attr;
+                pthread_attr_init(&attr);
+        pthread_create(&tid, &attr, producer, (void *) &threaddata);
     }
 
-    for( int y = 0; y < outThreadNumber; y++){
+    for(int y = 0; y < outThreadNumber; y++){
         threaddata.threadNumber=y;
-        if( pthread_create(&outThreads[y], NULL, consumer, (void *) &threaddata) != 0){
-            fprintf(stderr, "error: Cannot create thread # %d\n", y);
-            break;
-        }
+        pthread_t tid;
+                pthread_attr_t attr;
+                pthread_attr_init(&attr);
+        pthread_create(&tid, &attr, consumer, (void *) &threaddata);    
     }
-
-
-/*     for(int i = 0; i < inThreadNumber; i++){ */
-/*         threaddata.threadNumber=i; */
-/*              pthread_attr_t attr; */
-/*              pthread_attr_init(&attr); */
-/*         if( pthread_create(&inThreads[i], &attr, producer, (void *) &threaddata) != 0){ */
-/*             fprintf(stderr, "error: Cannot create thread # %d\n", i); */
-/*             break; */
-/*         } */
-/*         /1* pthread_create(&tid, &attr, producer, (void *) &threaddata); *1/ */
-/*     } */
-
-/*     for(int y = 0; y < outThreadNumber; y++){ */
-/*         threaddata.threadNumber=y; */
-/*              pthread_attr_t attr; */
-/*              pthread_attr_init(&attr); */
-/*         if( pthread_create(&outThreads[y], &attr, consumer, (void *) &threaddata) != 0){ */
-/*             fprintf(stderr, "error: Cannot create thread # %d\n", y); */
-/*             break; */
-/*         } */
-/*     } */
 
     close(tempinputFile);
-    sleep(18);
+    sleep(3);
     
     close(inputFile);
     close(outputFile);
